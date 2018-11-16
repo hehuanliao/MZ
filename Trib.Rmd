@@ -1,0 +1,1217 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+```{r}
+library(readxl)
+library(reshape2)
+library(ggplot2)
+library(dplyr)
+
+```
+
+```{r}
+#sequence summary
+#OTU table
+
+otu<-read_excel("../otu_table_subsampled.xlsx",skip=1,col_names = TRUE)
+colnames(otu)[1]="OTUID"
+head(otu)
+str(otu)
+otu[1:5,1:5]
+
+library(tidyr) # to use separate function to separate taxonomy into 7 levels 
+otu<-separate(otu,'taxonomy',c("Kingdom","Phylum","Class","Order","Family","Genus","Species"),sep=";",extra="warn",fill = "warn")
+otu[1:5,18:20]
+colnames(otu)
+otu[,c(1,18:24)]<-lapply(otu[,c(1,18:24)],as.factor)
+str(otu)
+dat=cbind(apply(otu[,2:17],1,sum),otu[,2:24])
+colnames(dat)[1]<-"Total"
+#examine annotations
+level.name = lapply(otu[,18:24],levels) #NA was not counted
+#level.name$Kingdom
+#level.name$Phylum
+#level.name$Class
+#level.name$Order
+#level.name$Family
+#level.name$Genus
+#level.name$Species
+
+select.k=level.name$Kingdom[-3]
+select.p=level.name$Phylum
+select.c=level.name$Class[-c(1,2)]
+select.o=level.name$Order[-c(1:7)]
+select.f=level.name$Family[-c(1:5)]
+select.g=level.name$Genus[-1]
+select.s=level.name$Species[-1]
+select=list(select.k,select.p,select.c,select.o,select.f,select.g,select.s)
+
+dat.s=as.data.frame(colnames(dat)[1:17])
+for (i in 18:24){
+  dat.sub=dat[(dat[,i]%in%select[[i-17]]),]
+  dat.ag=aggregate(dat.sub[,1:17],by=list(dat.sub[,i]),sum)
+  dat.s0=as.data.frame(colSums(dat.ag[,-1]))
+  dat.s=cbind(dat.s,dat.s0)
+  }
+colnames(dat.s)<-c("SampleID","Kingdom","Phylum","Class","Order","Family","Genus","Species")  
+dat.s
+
+
+dat.smelt<-melt(dat.s[-1,],id.vars = "SampleID")
+dat.smelt$variable<-factor(dat.smelt$variable,levels=c("Species","Genus","Family","Order","Class","Phylum","Kingdom"))
+dat.smelt$SampleID<-factor(dat.smelt$SampleID,levels=c("F1.w1","F1.s1","F2.w1","F2.s1","Dnt1.w1","Dnt1.s1","Dnt2.w1","Dnt2.s1","Dnt3.w1","Dnt3.s1","Dt1.w1","Dt1.s1","Dt2.w1","Dt2.s1","Dt3.w1","Dt3.s1"))
+p=ggplot(dat.smelt,aes(x=SampleID,y=value,fill=variable))+
+  geom_bar(stat='identity')+
+  geom_text(aes(label=value),position=position_stack(vjust=0.2),size=2)+
+  labs(x="Sample ID",y="number of sequences",fill="Level")+
+    theme(legend.title=element_blank(),
+        legend.text = element_text(colour="black",size=9))+
+  coord_flip()+
+  theme_bw()
+tiff("barplot.tif",res=600,units="in",width=7,height=4,family="sans",pointsize = 6)
+p
+dev.off()
+
+### summary of OTUs
+dat.a<-dat[dat$Kingdom=="k__Archaea",]  
+dat.b<-dat[dat$Kingdom=="k__Bacteria",]
+#unclassified 
+nrow(dat)-nrow(dat.a)-nrow(dat.b)  #two OTUs with unclassified kingdom
+nrow(dat)
+nrow(dat.a)
+nrow(dat.b)
+
+
+dat.otu=as.data.frame(colnames(dat)[1:17])
+for (i in 18:24){
+  dat.sub=dat.a[(dat[,i]%in%select[[i-17]]),]
+  dat.otu0=as.data.frame(colSums(dat.sub[,1:17]!=0,na.rm=TRUE))
+    dat.otu=cbind(dat.otu,dat.otu0)
+  }
+colnames(dat.otu)<-c("SampleID","Kingdom","Phylum","Class","Order","Family","Genus","Species")  
+dat.otua<-dat.otu
+dat.otua
+round(dat.otua[1,-1]/dat.otua[1,2]*100,1)
+
+dat.otu=as.data.frame(colnames(dat)[1:17])
+for (i in 18:24){
+  dat.sub=dat.b[(dat[,i]%in%select[[i-17]]),]
+  dat.otu0=as.data.frame(colSums(dat.sub[,1:17]!=0,na.rm=TRUE))
+    dat.otu=cbind(dat.otu,dat.otu0)
+  }
+colnames(dat.otu)<-c("SampleID","Kingdom","Phylum","Class","Order","Family","Genus","Species")  
+dat.otub<-dat.otu
+dat.otub
+round(dat.otub[1,-1]/dat.otub[1,2]*100,1)
+round(dat.otub[1,-1]/10702*100,1)
+
+dat.otu=as.data.frame(colnames(dat)[1:17])
+for (i in 18:24){
+  dat.sub=dat[(dat[,i]%in%select[[i-17]]),]
+  dat.otu0=as.data.frame(colSums(dat.sub[,1:17]!=0,na.rm=TRUE))
+    dat.otu=cbind(dat.otu,dat.otu0)
+  }
+colnames(dat.otu)<-c("SampleID","Kingdom","Phylum","Class","Order","Family","Genus","Species")  
+dat1<-dat.otu
+dat1
+round(dat1[1,-1]/nrow(dat)*100,1)
+
+```
+
+
+```{r}
+mapping<-read_excel("../mapping.xlsx")
+mapping[,1:5]<-lapply(mapping[,1:5],as.factor)
+
+adiv<-read_excel("../alpha_div.xlsx")
+adiv$`Sample ID`<-as.factor(adiv$`Sample ID`)
+colnames(adiv)[1]<-"SampleID"
+#adiv[,"pielou"]<-adiv$shannon/log(adiv$observed_species)/1.1734
+str(adiv)
+summary(adiv)
+
+adiv2<-merge(mapping,adiv,by="SampleID",all=TRUE)
+str(adiv2)
+summary(adiv2)
+
+#adiv2$SiteID<-factor(adiv2$SiteID,levels=c("F1","F2","Dnt1","Dnt2","Dnt3","Dt1","Dt2","Dt3"))
+#p<-ggplot(adiv2,aes(x=SiteID,y=observed_species,color=SampleType))
+#p<-p+geom_point(size=2.5)+
+#  scale_color_manual(values=c("brown","forest green"))+
+#  scale_x_discrete(
+#    breaks=c("F1","F2","Dnt1","Dnt2","Dnt3","Dt1","Dt2","Dt3"),
+#    labels=c("F1","F2","Dnt1","Dnt2","Dnt3","Dt1","Dt2","Dt3"),
+#    drop=FALSE
+#  )+
+#  theme(
+#    axis.title.x=element_blank(),
+#    axis.title.y=element_blank(),
+#    strip.text.x=element_text(size=12)
+#  )
+#
+#print(p)
+
+adiv3<-melt(adiv2[,c(1,3:5,9,12,10,11)],id=c("SiteID", "SiteType","SampleID","SampleType"))
+head(adiv3)
+adiv3$SiteID<-factor(adiv3$SiteID,levels=c("F1","F2","Dnt1","Dnt2","Dnt3","Dt1","Dt2","Dt3"))
+adiv3$variable<-factor(adiv3$variable,levels=c("observed_species","pielou","shannon","simpson"))
+#levels(adiv3$SiteID)<-c("F1","F2","Dnt1","Dnt2","Dnt3","Dt1","Dt2","Dt3")
+#levels(adiv3$variable)<-c("observed_species","pielou","shannon","simpson")
+
+p<-ggplot(adiv3,aes(x=SiteID,y=value,color=SampleType))
+p<-p+geom_point(size=2.5)+
+  facet_wrap(~variable,scales="free_y",ncol=1)+
+  labs(x=NULL,y="Index values")+
+    theme_bw()+
+  scale_color_manual(values=c("brown","forest green"),labels=c("sediment","water"))+
+  theme(legend.position = "top",legend.justification="left",
+        legend.title=element_blank(),legend.direction = "horizontal",
+        legend.text = element_text(colour="black",size=9),
+        legend.key.size=unit(1.5,"lines"),
+        legend.margin = margin(0,0,0,0),
+        legend.box.margin = margin(-5,-5,-5,-5),
+        axis.text.x=element_text(color="black")
+        )
+
+print(p)
+
+tiff("alphadiv-Site.tif",res=600,units="in",width=3.5,height=6,family="sans",pointsize=8)
+p
+dev.off()
+
+
+##test statistical significnt difference between groups
+adiv.g = adiv2[,c(1,4,3,5,9,12,10,11)]
+str(adiv.g)
+matrix(names(adiv.g))
+
+##Kruskal-Wallis Test (H0: there is no difference btw treatments, alpha=0.05--tests results cannot reject the null hypothesis p>0.05)
+p=numeric(0)
+for (i in 5:8){
+  p0=kruskal.test(adiv.g[,i]~SiteType,data=adiv.g)$p.value
+  p1=kruskal.test(adiv.g[,i]~SampleType,data=adiv.g)$p.value
+  p2=cbind(p0,p1)
+  p=rbind(p,p2)
+  }
+rownames(p)<-colnames(adiv.g[,5:8])
+colnames(p)<-c("pvalue-sitetype","pvalue-sampletype")
+p
+
+###wilcox test for two samples; kruskal test for three or more samples
+p=numeric(0)
+for (i in 5:8) {
+p.f=wilcox.test(adiv.g[adiv.g$SiteType=="F"&adiv.g$SampleType=="w",i],adiv.g[adiv.g$SiteType=="F"&adiv.g$SampleType=="s",i],alternative="two.sided")
+pf=p.f$p.value
+
+p.dnt=wilcox.test(adiv.g[adiv.g$SiteType=="Dnt"&adiv.g$SampleType=="w",i],adiv.g[adiv.g$SiteType=="Dnt"&adiv.g$SampleType=="s",i],alternative="two.sided")
+pdnt=p.dnt$p.value
+
+p.dt=wilcox.test(adiv.g[adiv.g$SiteType=="Dt"&adiv.g$SampleType=="w",i],adiv.g[adiv.g$SiteType=="Dt"&adiv.g$SampleType=="s",i],alternative="two.sided")
+pdt=p.dt$p.value
+
+p.a=wilcox.test(adiv.g[adiv.g$SampleType=="w",i],adiv.g[adiv.g$SampleType=="s",i],alternative="two.sided")
+pa=p.a$p.value
+
+p1=rbind(pf,pdnt,pdt,pa)
+p=cbind(p,p1)
+}
+rownames(p)<-c("F","Dnt","Dt","all")
+colnames(p)<-colnames(adiv.g)[5:8]
+p
+
+```
+
+```{r}
+env<-read_excel("../MetaEnv.xlsx")
+env<-env[-1,-c(1,2)]
+str(env)
+matrix(names(env))
+head(env)
+
+env[,6:21]<-lapply(env[,6:21],as.numeric)
+env$SiteID<-as.factor(env$SiteID)
+env$SiteType<-as.factor(env$SiteType)
+
+env3<-melt(env[,c(1,6:7,10,8,16,17,13:15,22)],id=c("SiteID","SiteType"))
+env3$SiteID<-factor(env3$SiteID,levels=c("F1","F2","Dnt1","Dnt2","Dnt3","Dt1","Dt2","Dt3"))
+env3$SiteType<-factor(env3$SiteType,levels=c("F","Dnt","Dt"))
+env3$variable<-factor(env3$variable,labels=c("Temp (degC)","pH","DO (mg/L)","EC (us/cm)","DOC (mg/L)","TN (mg/L)","NO3 (mg/L)","NO2 (mg/L)","NH4-N (mg/L)"))
+p<-ggplot(env3,aes(x=env3$SiteID,y=value,color=SiteType))
+p<-p+geom_point(size=2,shape=1)+
+  facet_wrap(~variable,scales="free_y",ncol=3)+
+  scale_color_manual(values=c("forestgreen","orange","maroon"),labels=c("Forest","Developed (non-tidal)","Developed (tidal)"))+
+  labs(x="Sample Site",y="Environmental Variables")+
+  theme_bw()+
+    theme(
+    axis.text.x=element_text(size=8,angle=45,hjust = 1,vjust = 1),
+    legend.position = "top",legend.justification="left",
+        legend.title=element_blank(),legend.direction = "horizontal",
+        legend.text = element_text(colour="black",size=9),
+        legend.key.size=unit(1.5,"lines"),
+        legend.margin = margin(0,0,0,0),
+        legend.box.margin = margin(-5,-5,-5,-5)
+  )
+
+tiff("Env-Site.tif",res=600,units="in",width=7,height=6.5,family="sans",pointsize=8)
+p
+dev.off()
+
+#install.packages("Rtsne")
+library(Rtsne)
+
+train<-as.data.frame(env[,c(1,22,6:7,10,8,16,17,13:15)])
+str(train)
+
+set.seed(168)
+tsne<-Rtsne(train[,-c(1,2)],dims=2,perplexity=2,verbose=TRUE,max_iter=1000,pca=TRUE)
+exeTimeTsne<-system.time(Rtsne(train[,-c(1,2)],dims=2,perplexity=2,verbose=TRUE,max_iter=1000))
+
+dat_tsne<-as.data.frame(cbind(tsne$Y,train[,c(1:2)]))
+colnames(dat_tsne)[1:2]<-c("V1","V2")
+
+dat_tsne$SiteType<-factor(dat_tsne$SiteType,levels=c("F","Dnt","Dt"))
+ptsne<-ggplot(dat_tsne,aes(x=V1,y=V2,color=SiteType))+
+  geom_point(size=2.5,shape=1)+
+  geom_text(aes(V1,V2,label=SiteID),hjust=-0.25,vjust=0.25,size=3)+
+  scale_color_manual(values=c("forestgreen","orange","maroon"),labels=c("Forest","Developed (non-tidal)","Developed (tidal)"))+
+  labs(x="Dim1",y="Dim2")+
+  theme_bw()+   
+theme(
+    legend.position = "top",legend.justification="left",
+        legend.title=element_blank(),legend.direction = "horizontal",
+        legend.text = element_text(colour="black",size=9),
+        legend.key.size=unit(1.5,"lines"),
+        legend.margin = margin(0,0,0,0),
+        legend.box.margin = margin(-5,-5,-5,-5)
+  )
+ptsne
+  
+tiff("Env-Site-tsne.tif",res=600,units="in",width=6.5,height=6,family="sans",pointsize=8)
+ptsne
+dev.off()
+
+
+#compare with pca
+#install.packages("FactoMineR")
+#install.packages("ade4")
+#install.packages("factoextra")
+library(FactoMineR)
+library(ade4)
+library(factoextra)
+
+rownames(train)<-train$SiteID
+pca1=dudi.pca(scale(train[,-c(1,2)],scale=TRUE,center=TRUE),scann=FALSE,nf=5)
+screeplot(pca1,main="Screeplot-Eigenvalues")
+s.corcircle(pca1$co)
+ scatter(pca1,
+ posieig="none", #hide the scree plot
+ clab.row=0
+ ) #hide row lables
+ eig.val<-get_eigenvalue(pca1)
+ eig.val
+ ##results for variables
+ res.var<-get_pca_var(pca1)
+ res.var$coord #coorinates
+ round(res.var$coord,3)
+ res.var$contrib # contribution to the PCs
+ round(res.var$contrib,3)
+ res.var$cos2 # quanlity of representation
+ ##results for individuals
+ res.ind <- get_pca_ind(pca1)
+ res.ind$coord          # Coordinates
+ res.ind$contrib        # Contributions to the PCs
+ res.ind$cos2           # Quality of representation 
+ 
+  tiff("screeplot.tif",res=600,units="in",width=6.5,height=4.5,family="sans",pointsize=8)
+ fviz_eig(pca1,ncp=10,addlabels=TRUE,hjust=0.5,geom="bar",choice="variance",barcolor="black",barfill="grey",xlab="Dimensions",ylab="Percentage of explained variances",
+ main=NULL,ggtheme=theme_classic()) ##ggtheme=theme_minimal()   ggtheme=theme_gray()   ggtheme=theme_bw()
+ dev.off()
+ eig.val<-get_eigenvalue(pca1)
+ 
+ ###individual contribution
+ p1=fviz_pca_ind(pca1,axes=c(1,2),geom=c("point","text"),
+                repel = TRUE,# Avoid text overlapping
+             habbillage=train$SiteType,palette=c("forestgreen","orange","maroon"),
+                ggtheme=theme_bw()
+                
+              )
+# p1=p1+scale_color_manual(values=c("forestgreen","orange","maroon"),labels=c("Forest","Developed (non-tidal)","Developed (tidal)"))
+   
+              
+ tiff("Env-Site-pca.tif",res=600,units="in",width=6.5,height=5,family="sans",pointsize=8)
+p1
+ dev.off()
+ 
+ 
+ ##correlation matrix of env
+ 
+ library(Hmisc)
+ library(corrplot)
+ 
+ M<-rcorr(as.matrix(env[,c(2,3,6:8,10,13:15)]),type="spearman")
+ tiff("env-spearman.tif",res=600,units="in",width=20,height=10,family="sans",point=6)
+ par(mfrow=c(1,2))
+corrplot(M$r,type="lower",order="original",tl.col="black",tl.srt=55,method="circle",p.mat=M$P,sig.level=0.05,insig="blank")
+text(41,88,"p<0.05")
+corrplot(M$r,type="lower",order="original",tl.col="black",tl.srt=55,method="circle",p.mat=M$P,sig.level=0.01,insig="blank")
+par(mfrow=c(1,1))
+text(82,88,"p<0.01")
+dev.off()
+
+tiff("env-spearman0.05.tif",res=600,units="in",width=10,height=10,family="sans",point=8)
+corrplot(M$r,type="lower",order="original",tl.col="black",tl.srt=55,method="circle",p.mat=M$P,sig.level=0.05,insig="blank")
+text(41,88,"p<0.05")
+dev.off()
+ 
+```
+
+
+```{r}
+###prepare phyloseq object
+# source("https://bioconductor.org/biocLite.R")
+# biocLite("DESeq2")
+# library(DESeq2)
+# library(devtools)
+# devtools::install_github("joey711/phyloseq")
+library(phyloseq)
+source("D:\\Postdoc-SUSTC\\MZ\\BioinformaticsR-packages\\miseqR.r") ## required for function scale_reads()
+
+
+biom1<-biomformat::read_biom("../OTU_table.biom")
+mp0<-import_biom(biom1)
+tax_table(mp0)<-tax_table(mp0)
+print(mp0)
+rank_names(mp0)
+colnames(tax_table(mp0))<-c("Kingdom","Phylum","Class","Order","Family","Genus","Species")
+
+##import phylogenetic tree
+tree<-read_tree("../rep_phylo.tre")
+##prepare environment data
+env<-read_excel("../MetaEnv.xlsx",sheet=1,col_names=TRUE)
+env<-env[-1,-c(1,2)]
+str(env)
+matrix(names(env))
+head(env)
+
+env[,6:21]<-lapply(env[,6:21],as.numeric)
+env$SiteID<-as.factor(env$SiteID)
+env$SiteType<-as.factor(env$SiteType)
+
+map<-read_excel("../mapping.xlsx")
+map<-lapply(map,as.factor)
+map<-as.data.frame(map)
+
+env<-merge(env,map[,-1],by="SiteID",all=TRUE)
+
+rownames(env)<-env$SampleID
+env<-sample_data(env)
+
+mp1<-merge_phyloseq(mp0,env)
+dat_merge<-merge_phyloseq(mp1,tree)
+
+dat_scale<-scale_reads(dat_merge,min(colSums(otu_table(dat_merge))))
+
+#to determine whether or not to use CCA (unimodal assumption) or RDA (linear assumption)
+
+library("FactoMineR")
+library(vegan)
+abund_table<-t(otu_table(dat_scale))
+
+##Just a check to ensure that the samples in env0 are in the same order as in abund_table
+rownames(abund_table)<-rownames(env)
+env<-env[rownames(abund_table),]
+##Filter out any samples taxas that have zero entries 
+abund_table<-subset(abund_table,rowSums(abund_table)!=0)
+##Convert to relative frequencies
+abund_table_rel<-abund_table/rowSums(abund_table)
+
+# #abund.ca<-CA(abund_table,ncp=5,graph=TRUE)
+#  #--??? length of gradient is greater than 3, should use CCA
+#  abund.rda<-rda(abund_table,graph=TRUE)
+#  plot(abund.rda) #-- length of gradient is greater than 4, should use CCA
+#   ###prepare different set of abundance table
+#   abund_table<-t(otu_table(dat_merge)) #original OTU abundance table without scaling or rarefraction
+#   abund_table<-t(otu_table(dat_scale)) #rarefractioned 
+#   abund_table[1:5,1:5]
+####It turns out the results are the same whether to use relative or original(Rarefried or unrarefried) OTU abundance table 
+
+##build CCA modal
+
+env.scale<-as.data.frame(scale(env[,c(6:10,13:17)],center=TRUE,scale=TRUE))
+
+env.scale<-as.data.frame(scale(env[,c(2:3,6:8,10,13:15)],center=TRUE,scale=TRUE))
+adonis(abund_table~.,data=env.scale)
+env.s1<-bioenv(abund_table,env.scale)  ## temp, EC, DO, pH + lat+long
+env.s1
+summary(env.s1)
+# 
+# #forward selection
+# M_init<-cca(abund_table~1,env.scale)
+# M_ful<-cca(abund_table~.,env.scale)
+# mo<-ordistep(M_init,scope=formula(M_ful))
+# anova.cca(mo)
+# set.seed(168)
+# anova.cca(mo,by="terms",perm=999)
+# anova.cca(mo,by="axis")
+# 
+# ###perform backword selection
+# set.seed(168)
+# env.anova<-env.scale
+# for (i in 1:4){
+#   env.anova<-env.anova
+# mo<-cca(abund_table~.,env.scale)
+# A<-anova(mo,by="terms",perm=1000)
+# B<-anova(mo,by="axis",perm=1000)
+# A.df<-na.omit(data.frame(A))
+# env.anova<-env.anova[,!colnames(env.anova)==rownames(A.df)[A.df$Pr..F.==max(A.df$Pr..F.)]]
+# if (max(A.df$Pr..F.)<0.1) break
+# else i=i+1
+# }
+# A 
+# B 
+
+#####plot 2 CCAs in one graph via the defined function multiplot(): 
+ cca_ord <- ordinate(
+      physeq = dat_scale, 
+      method = "CCA",
+    formula=~Temp+pH+EC+DO+NO3+X.NH4.N.
+  )
+  cca_plot <- plot_ordination(
+    physeq = dat_scale, 
+    ordination = cca_ord, 
+	type="site", # c("sites","species","biplot","split","scree")
+    axes = c(1,2),
+	color = "SiteType.x" #the default color scheme is modified afterward with an additional layer using scale_color_manual()
+  ) + 
+     geom_point(aes(colour = SiteType.x,shape="SampleType"), alpha = 0.6, size = 1) + 
+  	  geom_text(aes(label=SampleID),size=2.5,hjust=-0.5,vjust=-0.01)+
+	    
+      scale_color_manual(values = c("forestgreen", "orange","maroon"))+
+theme_bw()+
+theme(legend.position="top")    
+  cca_plot
+  
+  # Now add the environmental variables as arrows
+  arrowmat <- vegan::scores(cca_ord, display = "bp")
+  # Add labels, make a data.frame
+  arrowdf <- data.frame(labels = rownames(arrowmat), arrowmat)
+  # Define the arrow aesthetic mapping
+  arrow_map <- aes(xend = CCA1, 
+      yend = CCA2, 
+      x = 0, 
+      y = 0, 
+	  shape = NULL, 
+      color = NULL, 
+      label = labels)
+  
+  label_map <- aes(x = 1.3 * CCA1, 
+      y = 1.3 * CCA2, 
+	  shape = NULL, 
+      color = NULL,
+      label = labels)
+  
+  arrowhead = arrow(length = unit(0.02, "npc"))
+  # Make a new graphic
+  p1<-cca_plot + 
+    geom_segment(
+      mapping = arrow_map, 
+      size = .5, 
+      data = arrowdf, 
+      color = "gray", 
+      arrow = arrowhead
+	  ) + 
+ geom_text(
+   mapping = label_map, 
+   data = arrowdf, 
+   size = 3,  
+   nudge_x = 0.1,
+   nudge_y = 0.1,
+   show.legend = FALSE,
+   check_overlap = TRUE
+ )
+
+  print(p1)
+
+  
+###prune the original data for plotting
+  #remove OTUs that do not show appear more than 5 times in more than half the samples
+  dat0<-genefilter_sample(dat_merge,filterfun_sample(function(x) x>5),A=0.5*nsamples(dat_merge))
+  dat1<-prune_taxa(dat0,dat_merge)
+  #transform to even sampling depth
+  dat1<-transform_sample_counts(dat1,function(x) 1E6*x/sum(x))
+  #keep only the most abundant five phyla
+  phylum.sum=tapply(taxa_sums(dat1),tax_table(dat1)[,"Phylum"],sum,na.rm=TRUE)
+  top5phyla=names(sort(phylum.sum,TRUE))[1:5]
+  dat1<-prune_taxa((tax_table(dat1)[,"Phylum"]%in% top5phyla),dat1)
+  dat1
+  tax_table(dat1) #283 taxa remaining
+  
+  dat.ord<-ordinate(dat1,"NMDS","bray")
+  p1=plot_ordination(dat1,dat.ord,type="taxa",color="Phylum")
+  print(p1)
+  p1+facet_wrap(~Phylum,ncol=2)
+  
+  p2 = plot_ordination(dat1, dat.ord, type="samples", color="SampleType", shape="SiteType.x") 
+p2 + geom_polygon(aes(fill=SampleType)) + geom_point(size=5) 
+
+p4 = plot_ordination(dat1, dat.ord, type="split", color="Phylum", shape="SiteType.x", label="SampleID") 
+p4
+
+library(plyr)
+dist = "bray"
+#ord_meths = c("DCA", "CCA", "RDA", "DPCoA", "NMDS", "MDS", "PCoA")
+ord_meths = c("DCA", "CCA", "RDA", "DPCoA", "NMDS", "PCoA")
+plist = llply(as.list(ord_meths), function(i, physeq, dist){
+        ordi = ordinate(physeq, method=i, distance=dist)
+        plot_ordination(physeq, ordi, "samples", color="SampleType")
+}, dat1, dist)
+
+names(plist) <- ord_meths
+
+pdataframe = ldply(plist, function(x){
+    df = x$data[, 1:2]
+    colnames(df) = c("Axis_1", "Axis_2")
+    return(cbind(df, x$data))
+})
+names(pdataframe)[1] = "method"
+
+p = ggplot(pdataframe, aes(Axis_1, Axis_2, color=SampleType, shape=SiteType.x, fill=SampleType))
+p = p + geom_point(size=4) + geom_polygon()
+p = p + facet_wrap(~method, scales="free")
+p = p + scale_fill_brewer(type="qual", palette="Set1")
+p = p + scale_colour_brewer(type="qual", palette="Set1")+theme_bw()
+p   ### use pcoA or DCA
+
+###DCA
+
+dist = "bray"
+#ord_meths = c("DCA","PCoA")
+ord_meths = c("DCA")
+plist = llply(as.list(ord_meths), function(i, physeq, dist){
+        ordi = ordinate(physeq, method=i, distance=dist)
+        plot_ordination(physeq, ordi, "samples", color="SiteType.x")
+}, dat1, dist)
+
+names(plist) <- ord_meths
+
+pdataframe = ldply(plist, function(x){
+    df = x$data[, 1:2]
+    colnames(df) = c("Axis_1", "Axis_2")
+    return(cbind(df, x$data))
+})
+names(pdataframe)[1] = "method"
+
+pdataframe$SiteType.x=factor(pdataframe$SiteType.x,levels=c("F","Dnt","Dt"))
+pdataframe$SampleType=factor(pdataframe$SampleType,levels=c("w","s"))
+p = ggplot(pdataframe, aes(Axis_1, Axis_2, color=SiteType.x,shape=SampleType,fill=SiteType.x))
+p = p + geom_point(size=2.5) + geom_polygon()+
+   scale_color_manual("Site Type",values = c("forestgreen", "orange","maroon"))+
+  scale_fill_manual("Site Type",values=c("forestgreen", "orange","maroon"))+
+  scale_shape_manual("Sample Type",values=c(0,17))+
+
+theme_bw()
+
+tiff("DCA.tif",res=600,units="in",width=6.5,height=4,family="sans",pointsize = 8)
+p
+dev.off()
+
+###env.vif<-env.scale[,c(3:7)]
+###m=dim(env.vif)[2]
+###for (i in 1:m) {
+###env.vif<-env.vif
+###mo<-cca(abund_table~.,env.vif) 
+###vif.cca(mo) 
+###
+###vif<-data.frame(na.omit(vif.cca(mo)))
+###colnames(vif)<-"vifvalue"
+###rownames(vif)[vif$vifvalue==max(vif)]
+###
+###env.vif<-env.vif[,!colnames(env.vif)==rownames(vif)[vif$vifvalue==max(vif)]] ##select FALSE columns
+###
+###if (max(vif)<10) break   ###switch this value to 5 or 10 to determine variables with VIF less than 5 or 10
+###else i=i+1
+###}
+###vif  ## temp pH EC DO NO3
+###
+#######partition of variation (decomposition of variation into unique and shared components of several sources)
+###mod<-varpart(abund_table,~Temp+pH,~EC,~NO3,~DO,data=env.scale[,c(3:7)])##no change by using either scaled or original environmental data
+###mod
+###plot(mod)
+
+library(Rtsne)
+dat=dat1
+dat=dat_merge
+train<-as.data.frame(t(otu_table(dat)))
+
+set.seed(168)
+tsne<-Rtsne(train,dims=2,perplexity=5,verbose=TRUE,max_iter=1000,pca=TRUE)
+exeTimeTsne<-system.time(Rtsne(train,dims=2,perplexity=5,verbose=TRUE,max_iter=1000))
+
+dat_tsne<-as.data.frame(cbind(tsne$Y,sample_data(dat)[,23:25]))
+colnames(dat_tsne)[1:2]<-c("V1","V2")
+
+ptsne<-ggplot(dat_tsne,aes(x=V1,y=V2,color=SiteType.y))+
+  geom_point(size=2.5,shape=1)+
+  geom_text(aes(V1,V2,label=SampleID),hjust=-0.25,vjust=0.25,size=3)+
+  scale_color_manual(values=c("forestgreen","orange","maroon"),labels=c("Forest","Developed (non-tidal)","Developed (tidal)"))+
+  labs(x="Dim1",y="Dim2")+
+  theme_bw()+   
+theme(
+    legend.position = "top",legend.justification="left",
+        legend.title=element_blank(),legend.direction = "horizontal",
+        legend.text = element_text(colour="black",size=9),
+        legend.key.size=unit(1.5,"lines"),
+        legend.margin = margin(0,0,0,0),
+        legend.box.margin = margin(-5,-5,-5,-5)
+  )
+ptsne
+
+##Anosim
+
+Sys.getenv("MC_CORES")
+Sys.setenv(MC_CORES=6L)
+library(parallel)
+options("mc.cores"=6)
+Sys.getenv("MC_CORES")
+getOption("mc.cores")
+
+dat.ano<-anosim(abund_table,sample_data(dat_scale)$SampleType,permutations=999,distance="bray",parallel=getOption("mc.cores"))
+#summary(dat.ano)
+plot(dat.ano)
+list(dat.ano$signif,dat.ano$statistic)
+
+dat.ano<-anosim(abund_table[c(1:12),],sample_data(dat_scale)$SiteType.x[c(1:12)],permutations=999,distance="bray",parallel=getOption("mc.cores"))
+#summary(dat.ano)
+list(dat.ano$signif,dat.ano$statistic)
+
+dat.ano<-anosim(abund_table[c(1:6,13:16),],sample_data(dat_scale)$SiteType.x[c(1:6,13:16)],permutations=999,distance="bray",parallel=getOption("mc.cores"))
+#summary(dat.ano)
+list(dat.ano$signif,dat.ano$statistic)
+
+dat.ano<-anosim(abund_table[c(7:16),],sample_data(dat_scale)$SiteType.x[c(7:16)],permutations=999,distance="bray",parallel=getOption("mc.cores"))
+#summary(dat.ano)
+list(dat.ano$signif,dat.ano$statistic)
+
+```
+
+```{r}
+###cooccurance network
+rm=list(ls())
+library('igraph')
+library('psych')
+library('qgraph')
+library(readxl)
+library(doParallel)
+cl <- makeCluster(detectCores())
+registerDoParallel(cl)
+
+OTU<-read_xlsx("../OTU_Table.xlsx",skip=1,col_names = TRUE)
+colnames(OTU)[1]<-"OTUID"
+head(OTU)
+str(OTU)
+OTU[1:5,1:5]
+
+library(tidyr) # to use separate function to separate taxonomy into 7 levels 
+OTU<-separate(OTU,'taxonomy',c("Kingdom","Phylum","Class","Order","Family","Genus","Species"),sep=";",extra="warn",fill = "warn")
+
+level.name = lapply(otu[,18:24],levels) #NA was not counted
+OTU<-as.data.frame(OTU)
+row.names(OTU)<-substr(OTU$OTUID,4,8)
+OTU.F<-OTU[,14:17]
+OTU.Dnt<-OTU[,2:7]
+OTU.Dt<-OTU[,8:13]
+OTU.w<-OTU[,c(3,5,7,9,11,13,15,17)]
+OTU.s<-OTU[,c(2,4,6,8,10,12,14,16)]
+##??????OTU????????????????????????
+########selecting top 200 OTUs for network construction
+# OTU.F2<-t(OTU.F)
+# OTU.F2<-OTU.F2[apply(OTU.F2,1,sum)>0,apply(OTU.F2,2,sum)>232] #199 OTUs
+# ncol(OTU.F2)
+OTU.F<-OTU.F[order(apply(OTU.F,1,sum),decreasing = TRUE),]
+OTU.F<-OTU.F[1:200,]
+OTU.F2<-t(OTU.F)
+ncol(OTU.F2)
+
+OTU.Dnt2<-t(OTU.Dnt)
+OTU.Dnt2<-OTU.Dnt2[apply(OTU.Dnt2,1,sum)!=0,apply(OTU.Dnt2,2,sum)>460] 
+ncol(OTU.Dnt2)
+
+OTU.Dt2<-t(OTU.Dt)
+OTU.Dt2<-OTU.Dt2[apply(OTU.Dt2,1,sum)!=0,apply(OTU.Dt2,2,sum)>444] 
+ncol(OTU.Dt2)
+
+OTU.w2<-t(OTU.w)
+OTU.w2<-OTU.w2[apply(OTU.w2,1,sum)>0,apply(OTU.w2,2,sum)>360]
+ncol(OTU.w2)
+OTU.s2<-t(OTU.s)
+OTU.s2<-OTU.s2[apply(OTU.s2,1,sum)>0,apply(OTU.s2,2,sum)>675] 
+ncol(OTU.s2)
+
+occor.f=corr.test(OTU.F2,use="pairwise",method="spearman",adjust="fdr",alpha=0.05)
+f.r<-occor.f$r
+f.p<-occor.f$p
+f.r[f.p>0.01|abs(f.r)<0.6]=0
+
+occor.dnt=corr.test(OTU.Dnt2,use="pairwise",method="spearman",adjust="fdr",alpha=0.05)
+dnt.r<-occor.dnt$r
+dnt.p<-occor.dnt$p
+dnt.r[dnt.p>0.01|abs(dnt.r)<0.6]=0
+
+occor.dt=corr.test(OTU.Dt2,use="pairwise",method="spearman",adjust="fdr",alpha=0.05)
+dt.r<-occor.dt$r
+dt.p<-occor.dt$p
+dt.r[dt.p>0.01|abs(dt.r)<0.6]=0
+
+occor.w=corr.test(OTU.w2,use="pairwise",method="spearman",adjust="fdr",alpha=0.05)
+w.r<-occor.w$r
+w.p<-occor.w$p
+w.r[w.p>0.01|abs(w.r)<0.6]=0
+
+occor.s=corr.test(OTU.s2,use="pairwise",method="spearman",adjust="fdr",alpha=0.05)
+s.r<-occor.s$r
+s.p<-occor.s$p
+s.r[s.p>0.01|abs(s.r)<0.6]=0
+
+write.csv(f.r,"f-r-200-p0.01.csv")
+write.csv(dnt.r,"dnt-r-200-p0.01.csv")
+write.csv(dt.r,"dt-r-200-p0.01.csv")
+write.csv(w.r,"w-r-200-p0.01.csv")
+write.csv(s.r,"s-r-200-p0.01.csv")
+
+########F#########
+igraph = graph_from_adjacency_matrix(f.r,mode="undirected",weighted=TRUE,diag=FALSE)
+igraph.weight = E(igraph)$weight
+
+E(igraph)$weight = NA
+
+dgr<-degree(igraph)
+btw<-betweenness(igraph)
+cls<-closeness(igraph)
+node<-as.data.frame(cbind(dgr,btw,cls))
+node[,"OTUidNumber"]<-row.names(node)
+OTU[,"OTUidNumber"]<-row.names(OTU)
+node<-merge(node,OTU,all=FALSE)
+write.csv(node,"node-f.csv")
+
+set.seed(33)
+
+cor.pos<-sum(igraph.weight>0)# number of postive correlation
+cor.neg<-sum(igraph.weight<0)# number of negative correlation
+
+E.color = igraph.weight
+E.color = ifelse(E.color>0, "#FF000055",ifelse(E.color<0, "#0000FF55","#BEBEBE55"))
+E(igraph)$color = as.character(E.color)
+E(igraph)$width = abs(igraph.weight)
+
+igraph.size=OTU[row.names(OTU)%in%V(igraph)$name,]
+igraph.size=igraph.size[V(igraph)$name,] #make sure igraph.size is ordered as V(igraph)$name
+nrow(igraph.size)
+V(igraph)$size=degree(igraph)
+
+igraph.col=OTU[row.names(OTU)%in%V(igraph)$name,]
+igraph.col=igraph.col[V(igraph)$name,]
+igraph.col$Phylum<-as.factor(as.character(igraph.col$Phylum))
+sort(table(igraph.col$Phylum))
+levels(igraph.col$Phylum)
+
+# library(devtools)
+# install_github("ronammar/randomcoloR")
+library(randomcoloR)
+N=length(levels(igraph.col$Phylum))
+levels(igraph.col$Phylum)=distinctColorPalette(N)
+
+# levels(igraph.col$Phylum)<-c("#FFFF0077","#8B8B0066","#00008099","#ADFF2F66","#008B0077",
+# "#00FFFF77","#FF69B477","#8B3A6277","#D1D1D166","#D1D1D166",
+# "#EF000077","#4876FF99","#EE760077","#D1D1D166","#D1D1D166")
+
+V(igraph)$color=as.character(igraph.col$Phylum)
+
+set.seed(123)
+fc = cluster_fast_greedy(igraph,weights =NULL)# cluster_walktrap cluster_edge_betweenness, cluster_fast_greedy, cluster_spinglass
+ modularity = modularity(igraph,membership(fc))
+
+tiff("F-network-degreeNoLabel+isoNode.tif",res=1000,units="in",width=4,height=4,family="sans",pointsize=8)
+par(mar=c(0,0,0,0))
+pf0<-plot(igraph,layout=layout.fruchterman.reingold(igraph,niter=10000,start.temp=sqrt(vcount(igraph))),edge.lty=1,edge.curved=TRUE,
+vertex.label=NA,vertex.frame.color="#26262699",margin=c(0,0,0,0))
+dev.off()
+
+tiff("F-network-degree+isoNode.tif",res=1000,units="in",width=8,height=8,family="sans",pointsize=8)
+par(mar=c(0,0,0,0))
+pf<-plot(igraph,layout=layout.fruchterman.reingold(igraph,niter=10000,start.temp=sqrt(vcount(igraph))),edge.lty=1,edge.curved=TRUE,
+vertex.label.font=1,vertex.label.cex=0.6,vertex.frame.color="#26262699",vertex.label.color="black",margin=c(0,0,0,0))
+dev.off()
+
+num.edges = length(E(igraph)) # length(curve_multiple(igraph))
+num.vertices = length(V(igraph))# length(diversity(igraph, weights = NULL, vids = V(igraph)))
+connectance = edge_density(igraph,loops=FALSE)
+average.degree = mean(igraph::degree(igraph))
+average.path.length = average.path.length(igraph) 
+diameter = diameter(igraph, directed = FALSE, unconnected = TRUE, weights = NULL)
+edge.connectivity = edge_connectivity(igraph)
+clustering.coefficient = transitivity(igraph) 
+no.clusters = no.clusters(igraph)
+centralization.betweenness = centralization.betweenness(igraph)$centralization 
+centralization.degree = centralization.degree(igraph)$centralization
+
+param.f<-matrix(c(num.edges,num.vertices,cor.pos,cor.neg,modularity,connectance,average.degree,average.path.length,diameter, edge.connectivity,clustering.coefficient,no.clusters,centralization.betweenness,centralization.degree))
+rownames(param.f)<-c("num.edges","num.vertices","num.pos","num.neg","modularity","connectance","average.degree","average.path.length","diameter", "edge.connectivity","clustering.coefficient","no.clusters","centralization.betweenness","centralization.degree")
+colnames(param.f)<-"F"
+param.f<-as.data.frame(param.f)
+param.f$F<-round(param.f,2)
+param.f
+
+#########################DNT#########
+######################f.r,dnt.r,dt.r#############################
+igraph = graph_from_adjacency_matrix(dnt.r,mode="undirected",weighted=TRUE,diag=FALSE)
+igraph
+igraph.weight = E(igraph)$weight
+E(igraph)$weight = NA
+dgr<-degree(igraph)
+btw<-betweenness(igraph)
+cls<-closeness(igraph)
+node<-as.data.frame(cbind(dgr,btw,cls))
+node
+node[,"OTUidNumber"]<-row.names(node)
+OTU[,"OTUidNumber"]<-row.names(OTU)
+node<-merge(node,OTU,all=FALSE)
+################f,dnt,dt#######################
+write.csv(node,"node-dnt.csv")
+######################################
+cor.pos<-sum(igraph.weight>0)# number of postive correlation
+cor.neg<-sum(igraph.weight<0)# number of negative correlation
+
+E.color = igraph.weight
+E.color = ifelse(E.color>0, "#FF000055",ifelse(E.color<0, "#0000FF55","#BEBEBE55"))
+E(igraph)$color = as.character(E.color)
+
+E(igraph)$width = abs(igraph.weight)
+
+igraph.size=OTU[row.names(OTU)%in%V(igraph)$name,]
+igraph.size=igraph.size[V(igraph)$name,] #make sure igraph.size is ordered as V(igraph)$name
+nrow(igraph.size)
+V(igraph)$size=degree(igraph)
+
+igraph.col=OTU[row.names(OTU)%in%V(igraph)$name,]
+igraph.col=igraph.col[V(igraph)$name,]
+igraph.col$Phylum<-as.factor(as.character(igraph.col$Phylum))
+sort(table(igraph.col$Phylum))
+levels(igraph.col$Phylum)
+
+N=length(levels(igraph.col$Phylum))
+levels(igraph.col$Phylum)=distinctColorPalette(N)
+
+# levels(igraph.col$Phylum)<-c("#FFFF0077","#8B8B0066","#00008099","#ADFF2F66","#008B0077",
+# "#00FFFF77","#FF69B477","#8B3A6277","#D1D1D166","#D1D1D166",
+# "#EF000077","#4876FF99","#EE760077","#D1D1D166","#D1D1D166")
+
+V(igraph)$color=as.character(igraph.col$Phylum)
+
+set.seed(123)
+
+fc = cluster_fast_greedy(igraph,weights =NULL)# cluster_walktrap cluster_edge_betweenness, cluster_fast_greedy, cluster_spinglass
+ modularity = modularity(igraph,membership(fc))
+####################F,Dnt,Dt##############
+tiff("Dnt-network-degreeNoLabel+isoNode.tif",res=1000,units="in",width=4,height=4,family="sans",pointsize=8)
+par(mar=c(0,0,0,0))
+pdnt0<-plot(igraph,layout=layout.fruchterman.reingold(igraph,niter=10000,start.temp=sqrt(vcount(igraph))),edge.lty=1,edge.curved=TRUE,
+vertex.label=NA,vertex.frame.color="#26262699",margin=c(0,0,0,0))
+dev.off()
+
+tiff("Dnt-network-degree+isoNode.tif",res=1000,units="in",width=8,height=8,family="sans",pointsize=8)
+par(mar=c(0,0,0,0))
+pdnt<-plot(igraph,layout=layout.fruchterman.reingold(igraph,niter=10000,start.temp=sqrt(vcount(igraph))),edge.lty=1,edge.curved=TRUE,
+vertex.label.font=1,vertex.label.cex=0.6,vertex.frame.color="#26262699",vertex.label.color="black",margin=c(0,0,0,0))
+dev.off()
+
+num.edges = length(E(igraph)) 
+num.vertices = length(V(igraph))
+connectance = edge_density(igraph,loops=FALSE)
+average.degree = mean(igraph::degree(igraph))
+average.path.length = average.path.length(igraph) 
+diameter = diameter(igraph, directed = FALSE, unconnected = TRUE, weights = NULL)
+edge.connectivity = edge_connectivity(igraph)
+clustering.coefficient = transitivity(igraph) 
+no.clusters = no.clusters(igraph)
+centralization.betweenness = centralization.betweenness(igraph)$centralization 
+centralization.degree = centralization.degree(igraph)$centralization
+
+param.dnt<-matrix(c(num.edges,num.vertices,cor.pos,cor.neg,modularity,connectance,average.degree,average.path.length,diameter, edge.connectivity,clustering.coefficient,no.clusters,centralization.betweenness,centralization.degree))
+rownames(param.dnt)<-c("num.edges","num.vertices","num.pos","num.neg","modularity","connectance","average.degree","average.path.length","diameter","edge.connectivity","clustering.coefficient","no.clusters","centralization.betweenness","centralization.degree")
+colnames(param.dnt)<-"Dnt"
+param.dnt<-as.data.frame(param.dnt)
+param.dnt$Dnt<-round(param.dnt,2)
+param.dnt
+
+##############Dt
+######################f.r,dnt.r,dt.r#############################
+igraph = graph_from_adjacency_matrix(dt.r,mode="undirected",weighted=TRUE,diag=FALSE)
+igraph
+igraph.weight = E(igraph)$weight
+E(igraph)$weight = NA
+dgr<-degree(igraph)
+btw<-betweenness(igraph)
+cls<-closeness(igraph)
+node<-as.data.frame(cbind(dgr,btw,cls))
+node
+node[,"OTUidNumber"]<-row.names(node)
+OTU[,"OTUidNumber"]<-row.names(OTU)
+node<-merge(node,OTU,all=FALSE)
+################f,dnt,dt#######################
+write.csv(node,"node-dt.csv")
+######################################
+
+cor.pos<-sum(igraph.weight>0)# number of postive correlation
+cor.neg<-sum(igraph.weight<0)# number of negative correlation
+
+E.color = igraph.weight
+E.color = ifelse(E.color>0, "#FF000055",ifelse(E.color<0, "#0000FF55","#BEBEBE55"))
+E(igraph)$color = as.character(E.color)
+
+E(igraph)$width = abs(igraph.weight)
+
+igraph.size=OTU[row.names(OTU)%in%V(igraph)$name,]
+igraph.size=igraph.size[V(igraph)$name,] #make sure igraph.size is ordered as V(igraph)$name
+nrow(igraph.size)
+V(igraph)$size=degree(igraph)
+
+igraph.col=OTU[row.names(OTU)%in%V(igraph)$name,]
+igraph.col=igraph.col[V(igraph)$name,]
+igraph.col$Phylum<-as.factor(as.character(igraph.col$Phylum))
+sort(table(igraph.col$Phylum))
+levels(igraph.col$Phylum)
+
+N=length(levels(igraph.col$Phylum))
+levels(igraph.col$Phylum)=distinctColorPalette(N)
+
+# levels(igraph.col$Phylum)<-c("#FFFF0077","#8B8B0066","#00008099","#ADFF2F66","#008B0077",
+# "#00FFFF77","#FF69B477","#8B3A6277","#D1D1D166","#D1D1D166",
+# "#EF000077","#4876FF99","#EE760077","#D1D1D166","#D1D1D166")
+
+V(igraph)$color=as.character(igraph.col$Phylum)
+
+set.seed(123)
+
+fc = cluster_fast_greedy(igraph,weights =NULL)# cluster_walktrap cluster_edge_betweenness, cluster_fast_greedy, cluster_spinglass
+ modularity = modularity(igraph,membership(fc))
+
+####################F,Dnt,Dt##############
+tiff("Dt-network-degreeNoLabel+isoNode.tif",res=1000,units="in",width=4,height=4,family="sans",pointsize=8)
+par(mar=c(0,0,0,0))
+pdt0<-plot(igraph,layout=layout.fruchterman.reingold(igraph,niter=10000,start.temp=sqrt(vcount(igraph))),edge.lty=1,edge.curved=TRUE,
+vertex.label=NA,vertex.frame.color="#26262699",margin=c(0,0,0,0))
+dev.off()
+
+# tiff("Dt-network-degree+isoNode.tif",res=1000,units="in",width=8,height=8,family="sans",pointsize=8)
+# par(mar=c(0,0,0,0))
+# pdt<-plot(igraph,layout=layout.fruchterman.reingold(igraph,niter=10000,start.temp=sqrt(vcount(igraph))),edge.lty=1,edge.curved=TRUE,
+# vertex.label.font=1,vertex.label.cex=0.6,vertex.frame.color="#26262699",vertex.label.color="black",margin=c(0,0,0,0))
+# dev.off()
+
+num.edges = length(E(igraph)) 
+num.vertices = length(V(igraph))
+connectance = edge_density(igraph,loops=FALSE)
+average.degree = mean(igraph::degree(igraph))
+average.path.length = average.path.length(igraph) 
+diameter = diameter(igraph, directed = FALSE, unconnected = TRUE, weights = NULL)
+edge.connectivity = edge_connectivity(igraph)
+clustering.coefficient = transitivity(igraph) 
+no.clusters = no.clusters(igraph)
+centralization.betweenness = centralization.betweenness(igraph)$centralization 
+centralization.degree = centralization.degree(igraph)$centralization
+
+###########param.dt, param.dt, param.dt################"F","Dnt","Dt"###########
+param.dt<-matrix(c(num.edges,num.vertices,cor.pos,cor.neg,modularity,connectance,average.degree,average.path.length,diameter, edge.connectivity,clustering.coefficient,no.clusters,centralization.betweenness,centralization.degree))
+rownames(param.dt)<-c("num.edges","num.vertices","num.pos","num.neg","modularity","connectance","average.degree","average.path.length","diameter","edge.connectivity","clustering.coefficient","no.clusters","centralization.betweenness","centralization.degree")
+colnames(param.dt)<-"Dt"
+param.dt<-as.data.frame(param.dt)
+param.dt$Dt<-round(param.dt,2)
+param.dt
+
+
+#################w
+igraph = graph_from_adjacency_matrix(w.r,mode="undirected",weighted=TRUE,diag=FALSE)
+igraph
+igraph.weight = E(igraph)$weight
+E(igraph)$weight = NA
+dgr<-degree(igraph)
+btw<-betweenness(igraph)
+cls<-closeness(igraph)
+node<-as.data.frame(cbind(dgr,btw,cls))
+node
+node[,"OTUidNumber"]<-row.names(node)
+OTU[,"OTUidNumber"]<-row.names(OTU)
+node<-merge(node,OTU,all=FALSE)
+################f,dnt,dt#######################
+write.csv(node,"node-w.csv")
+######################################
+
+cor.pos<-sum(igraph.weight>0)# number of postive correlation
+cor.neg<-sum(igraph.weight<0)# number of negative correlation
+
+E.color = igraph.weight
+E.color = ifelse(E.color>0, "#FF000055",ifelse(E.color<0, "#0000FF55","#BEBEBE55"))
+E(igraph)$color = as.character(E.color)
+
+E(igraph)$width = abs(igraph.weight)
+
+igraph.size=OTU[row.names(OTU)%in%V(igraph)$name,]
+igraph.size=igraph.size[V(igraph)$name,] #make sure igraph.size is ordered as V(igraph)$name
+nrow(igraph.size)
+V(igraph)$size=degree(igraph)
+
+igraph.col=OTU[row.names(OTU)%in%V(igraph)$name,]
+igraph.col=igraph.col[V(igraph)$name,]
+igraph.col$Phylum<-as.factor(as.character(igraph.col$Phylum))
+sort(table(igraph.col$Phylum))
+levels(igraph.col$Phylum)
+
+N=length(levels(igraph.col$Phylum))
+levels(igraph.col$Phylum)=distinctColorPalette(N)
+
+# levels(igraph.col$Phylum)<-c("#FFFF0077","#8B8B0066","#00008099","#ADFF2F66","#008B0077",
+# "#00FFFF77","#FF69B477","#8B3A6277","#D1D1D166","#D1D1D166",
+# "#EF000077","#4876FF99","#EE760077","#D1D1D166","#D1D1D166")
+
+V(igraph)$color=as.character(igraph.col$Phylum)
+
+
+fc = cluster_fast_greedy(igraph,weights =NULL)# cluster_walktrap cluster_edge_betweenness, cluster_fast_greedy, cluster_spinglass
+ modularity = modularity(igraph,membership(fc))
+
+set.seed(123)
+####################F,Dnt,Dt##############
+tiff("w-network-degreeNoLabel+isoNode.tif",res=1000,units="in",width=4,height=4,family="sans",pointsize=8)
+par(mar=c(0,0,0,0))
+pw0<-plot(igraph,layout=layout.fruchterman.reingold(igraph,niter=10000,start.temp=sqrt(vcount(igraph))),edge.lty=1,edge.curved=TRUE,
+vertex.label=NA,vertex.frame.color="#26262699",margin=c(0,0,0,0))
+dev.off()
+
+# tiff("w-network-degree+isoNode.tif",res=1000,units="in",width=8,height=8,family="sans",pointsize=8)
+# par(mar=c(0,0,0,0))
+# pw<-plot(igraph,layout=layout.fruchterman.reingold(igraph,niter=10000,start.temp=sqrt(vcount(igraph))),edge.lty=1,edge.curved=TRUE,
+# vertex.label.font=1,vertex.label.cex=0.6,vertex.frame.color="#26262699",vertex.label.color="black",margin=c(0,0,0,0))
+# dev.off()
+
+num.edges = length(E(igraph)) 
+num.vertices = length(V(igraph))
+connectance = edge_density(igraph,loops=FALSE)
+average.degree = mean(igraph::degree(igraph))
+average.path.length = average.path.length(igraph) 
+diameter = diameter(igraph, directed = FALSE, unconnected = TRUE, weights = NULL)
+edge.connectivity = edge_connectivity(igraph)
+clustering.coefficient = transitivity(igraph) 
+no.clusters = no.clusters(igraph)
+centralization.betweenness = centralization.betweenness(igraph)$centralization 
+centralization.degree = centralization.degree(igraph)$centralization
+
+###########param.dnt, param.dnt, param.dt################"F","Dnt","Dt"###########
+param.w<-matrix(c(num.edges,num.vertices,cor.pos,cor.neg,modularity,connectance,average.degree,average.path.length,diameter, edge.connectivity,clustering.coefficient,no.clusters,centralization.betweenness,centralization.degree))
+rownames(param.w)<-c("num.edges","num.vertices","num.pos","num.neg","modularity","connectance","average.degree","average.path.length","diameter", "edge.connectivity","clustering.coefficient","no.clusters","centralization.betweenness","centralization.degree")
+colnames(param.w)<-"w"
+param.w<-as.data.frame(param.w)
+param.w$w<-round(param.w,2)
+param.w
+
+
+####################s
+igraph = graph_from_adjacency_matrix(s.r,mode="undirected",weighted=TRUE,diag=FALSE)
+igraph
+igraph.weight = E(igraph)$weight
+E(igraph)$weight = NA
+dgr<-degree(igraph)
+btw<-betweenness(igraph)
+cls<-closeness(igraph)
+node<-as.data.frame(cbind(dgr,btw,cls))
+node
+node[,"OTUidNumber"]<-row.names(node)
+OTU[,"OTUidNumber"]<-row.names(OTU)
+node<-merge(node,OTU,all=FALSE)
+################f,dnt,dt#######################
+write.csv(node,"node-s.csv")
+######################################
+cor.pos<-sum(igraph.weight>0)# number of postive correlation
+cor.neg<-sum(igraph.weight<0)# number of negative correlation
+
+E.color = igraph.weight
+E.color = ifelse(E.color>0, "#FF000055",ifelse(E.color<0, "#0000FF55","#BEBEBE55"))
+E(igraph)$color = as.character(E.color)
+
+E(igraph)$width = abs(igraph.weight)
+
+igraph.size=OTU[row.names(OTU)%in%V(igraph)$name,]
+igraph.size=igraph.size[V(igraph)$name,] #make sure igraph.size is ordered as V(igraph)$name
+nrow(igraph.size)
+V(igraph)$size=degree(igraph)
+
+igraph.col=OTU[row.names(OTU)%in%V(igraph)$name,]
+igraph.col=igraph.col[V(igraph)$name,]
+igraph.col$Phylum<-as.factor(as.character(igraph.col$Phylum))
+sort(table(igraph.col$Phylum))
+levels(igraph.col$Phylum)
+
+N=length(levels(igraph.col$Phylum))
+levels(igraph.col$Phylum)=distinctColorPalette(N)
+
+# levels(igraph.col$Phylum)<-c("#FFFF0077","#8B8B0066","#00008099","#ADFF2F66","#008B0077",
+# "#00FFFF77","#FF69B477","#8B3A6277","#D1D1D166","#D1D1D166",
+# "#EF000077","#4876FF99","#EE760077","#D1D1D166","#D1D1D166")
+
+V(igraph)$color=as.character(igraph.col$Phylum)
+
+
+fc = cluster_fast_greedy(igraph,weights =NULL)# cluster_walktrap cluster_edge_betweenness, cluster_fast_greedy, cluster_spinglass
+ modularity = modularity(igraph,membership(fc))
+
+set.seed(123)
+####################F,Dnt,Dt##############
+tiff("s-network-degreeNoLabel+isoNode.tif",res=1000,units="in",width=4,height=4,family="sans",pointsize=8)
+par(mar=c(0,0,0,0))
+ps0<-plot(igraph,layout=layout.fruchterman.reingold(igraph,niter=10000,start.temp=sqrt(vcount(igraph))),edge.lty=1,edge.curved=TRUE,
+vertex.label=NA,vertex.frame.color="#26262699",margin=c(0,0,0,0))
+dev.off()
+
+# tiff("s-network-degree+isoNode.tif",res=1000,units="in",width=8,height=8,family="sans",pointsize=8)
+# par(mar=c(0,0,0,0))
+# ps<-plot(igraph,layout=layout.fruchterman.reingold(igraph,niter=10000,start.temp=sqrt(vcount(igraph))),edge.lty=1,edge.curved=TRUE,
+# vertex.label.font=1,vertex.label.cex=0.6,vertex.frame.color="#26262699",vertex.label.color="black",margin=c(0,0,0,0))
+# dev.off()
+
+num.edges = length(E(igraph)) 
+num.vertices = length(V(igraph))
+connectance = edge_density(igraph,loops=FALSE)
+average.degree = mean(igraph::degree(igraph))
+average.path.length = average.path.length(igraph) 
+diameter = diameter(igraph, directed = FALSE, unconnected = TRUE, weights = NULL)
+edge.connectivity = edge_connectivity(igraph)
+clustering.coefficient = transitivity(igraph) 
+no.clusters = no.clusters(igraph)
+centralization.betweenness = centralization.betweenness(igraph)$centralization 
+centralization.degree = centralization.degree(igraph)$centralization
+
+###########param.dnt, param.dnt, param.dt################"F","Dnt","Dt"###########
+param.s<-matrix(c(num.edges,num.vertices,cor.pos,cor.neg,modularity,connectance,average.degree,average.path.length,diameter, edge.connectivity,clustering.coefficient,no.clusters,centralization.betweenness,centralization.degree))
+rownames(param.s)<-c("num.edges","num.vertices","num.pos","num.neg","modularity","connectance","average.degree","average.path.length","diameter","edge.connectivity","clustering.coefficient","no.clusters","centralization.betweenness","centralization.degree")
+colnames(param.s)<-"s"
+param.s<-as.data.frame(param.s)
+param.s$s<-round(param.s,2)
+param.s
+
+##########
+param<-cbind(param.f,param.dnt,param.dt,param.w,param.s)
+param
+
+stopCluster(cl)
+```
+
+
+```{r}
+#ternary plot
+
+
+```
+```
